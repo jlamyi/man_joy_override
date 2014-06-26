@@ -90,7 +90,7 @@ def talker():
   rospy.Subscriber('robot1/cmd_vel_in', Twist, state.cmd_callback_1)
   rospy.Subscriber('robot2/cmd_vel_in', Twist, state.cmd_callback_2)
   rospy.Subscriber('joy', Joy, state.joy_callback)
-  r = rospy.Rate(10)
+  r = rospy.Rate(30)
 
   while not rospy.is_shutdown():
     # for each publisher, use joystick if joy_dest designates one of the robots
