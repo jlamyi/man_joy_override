@@ -47,6 +47,14 @@ class ManJoyState():
     
     self.lock.release()
 
+  def cmd_callback(self, which, tw_msg):
+    self.lock.acquire()
+    # update cmd_in
+    self.cmd_in[which] = (tw_msg.linear.x, tw_msg.angular.z)
+    rospy.loginfo('callback cmd_in[%d] = (%f,%f)' % 
+      (which, self.cmd_in[which][0], self.cmd_in[which][1]))
+    self.lock.release()
+    
   def cmd_callback_0(self, tw_msg):
     self.lock.acquire()
     which = 0
@@ -78,17 +86,20 @@ def talker():
   state = ManJoyState()
 
   rospy.init_node('man_joy_override', anonymous=True)
-  
 
   pubs = []
   for i in range(N_ROBOT):
     pubs.append(rospy.Publisher('robot%d/cmd_vel_out' % i, Twist))
-#rospy.Subscriber('robot%d/cmd_vel_in' % i, Twist, 
-#     lambda m: state.cmd_callback(i, m))
+    
+    # need to create a new functional scope to callback based on topic number
+    def curried_callback(j):
+      return lambda m: state.cmd_callback(j,m)
+
+    rospy.Subscriber('robot%d/cmd_vel_in' % i, Twist, curried_callback(i))
   
-  rospy.Subscriber('robot0/cmd_vel_in', Twist, state.cmd_callback_0)
-  rospy.Subscriber('robot1/cmd_vel_in', Twist, state.cmd_callback_1)
-  rospy.Subscriber('robot2/cmd_vel_in', Twist, state.cmd_callback_2)
+#rospy.Subscriber('robot0/cmd_vel_in', Twist, state.cmd_callback_0)
+#rospy.Subscriber('robot1/cmd_vel_in', Twist, state.cmd_callback_1)
+#rospy.Subscriber('robot2/cmd_vel_in', Twist, state.cmd_callback_2)
   rospy.Subscriber('joy', Joy, state.joy_callback)
   r = rospy.Rate(30)
 
