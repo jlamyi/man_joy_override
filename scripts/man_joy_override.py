@@ -18,7 +18,7 @@ def vo_to_twist(vo):
 class ManJoyState():
   def __init__(self):
     self.cmd_in = [(0,0)]*N_ROBOT
-    self.joy_dest = [N_ROBOT]*N_STICK
+    self.joy_dest = range(N_STICK)
     self.joy_in = [(0,0)]*N_STICK
     self.lock = threading.Condition()
 

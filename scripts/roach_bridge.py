@@ -14,6 +14,8 @@ import shared_multi as shared
 
 DEFAULT_ADDRS = ['\x20\x72','\x20\x73']
 
+MIN_VEL = 0.5
+
 class RoachBridge():
   def __init__(self, xb, robot_addrs=DEFAULT_ADDRS, robot_offset=0):
     self.xb = xb
@@ -42,12 +44,12 @@ class RoachBridge():
     print 'RoachBridge init complete'
 
   def command_callback(self, command, robot_id):
-    lv = 2.0
-    la = 1.0
+    lv = 3.0
+    la = 2.0
     v = command.linear.x
     a = command.angular.z
-    r = lv*v + la*(abs(a) + a)
-    l = lv*v + la*(abs(a) - a)
+    r = lv*v + la*(abs(a) + a)/2
+    l = lv*v + la*(abs(a) - a)/2
     self.lock.acquire()
     self.states[robot_id] = [l,r]
     self.lock.release()
@@ -76,7 +78,7 @@ class RoachBridge():
       self.lock.acquire()
       for state, robot in zip(self.states, self.robots):
         #robot.setThrustOpenLoop(state[0],state[1],200)
-        if state[0] < 0.2 and state[1] < 0.2:
+        if state[0] < MIN_VEL and state[1] < MIN_VEL:
           state = [0.0,0.0]
           if robot.running:
             STOP_ROBOT(robot)
@@ -84,8 +86,8 @@ class RoachBridge():
           if not robot.running:
             START_ROBOT(robot)
           else:
-            if state[0] < 0.2: state[0] = 0.2
-            if state[1] < 0.2: state[1] = 0.2
+            if state[0] < MIN_VEL: state[0] = MIN_VEL
+            if state[1] < MIN_VEL: state[1] = MIN_VEL
             SET_VELOCITIES(robot, state[0], state[1], simpleAltTripod)
       self.lock.release()
 
