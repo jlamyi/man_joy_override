@@ -55,33 +55,6 @@ class ManJoyState():
       (which, self.cmd_in[which][0], self.cmd_in[which][1]))
     self.lock.release()
     
-  def cmd_callback_0(self, tw_msg):
-    self.lock.acquire()
-    which = 0
-    # update cmd_in
-    self.cmd_in[which] = (tw_msg.linear.x, tw_msg.angular.z)
-    rospy.loginfo('callback cmd_in[%d] = (%f,%f)' % 
-      (which, self.cmd_in[which][0], self.cmd_in[which][1]))
-    self.lock.release()
-
-  def cmd_callback_1(self, tw_msg):
-    self.lock.acquire()
-    which = 1
-    # update cmd_in
-    self.cmd_in[which] = (tw_msg.linear.x, tw_msg.angular.z)
-    rospy.loginfo('callback cmd_in[%d] = (%f,%f)' % 
-      (which, self.cmd_in[which][0], self.cmd_in[which][1]))
-    self.lock.release()
-
-  def cmd_callback_2(self, tw_msg):
-    self.lock.acquire()
-    which = 2
-    # update cmd_in
-    self.cmd_in[which] = (tw_msg.linear.x, tw_msg.angular.z)
-    rospy.loginfo('callback cmd_in[%d] = (%f,%f)' % 
-      (which, self.cmd_in[which][0], self.cmd_in[which][1]))
-    self.lock.release()
-
 def talker():
   state = ManJoyState()
 
@@ -89,7 +62,7 @@ def talker():
 
   pubs = []
   for i in range(N_ROBOT):
-    pubs.append(rospy.Publisher('robot%d/cmd_vel_out' % i, Twist))
+    pubs.append(rospy.Publisher('robot%d/cmd_vel' % i, Twist, queue_size = 1))
     
     # need to create a new functional scope to callback based on topic number
     def curried_callback(j):
@@ -97,9 +70,6 @@ def talker():
 
     rospy.Subscriber('robot%d/cmd_vel_in' % i, Twist, curried_callback(i))
   
-#rospy.Subscriber('robot0/cmd_vel_in', Twist, state.cmd_callback_0)
-#rospy.Subscriber('robot1/cmd_vel_in', Twist, state.cmd_callback_1)
-#rospy.Subscriber('robot2/cmd_vel_in', Twist, state.cmd_callback_2)
   rospy.Subscriber('joy', Joy, state.joy_callback)
   r = rospy.Rate(30)
 
@@ -109,8 +79,8 @@ def talker():
     for i in range(N_ROBOT):
       state.lock.acquire()
       which = i
-      rospy.loginfo('talker cmd_in[%d] = (%f,%f)' % 
-        (which, state.cmd_in[which][0], state.cmd_in[which][1]))
+      #rospy.loginfo('talker cmd_in[%d] = (%f,%f)' % 
+        #(which, state.cmd_in[which][0], state.cmd_in[which][1]))
 
       if i in state.joy_dest:
         vo_cmd = state.joy_in[state.joy_dest.index(i)]
