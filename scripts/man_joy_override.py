@@ -5,9 +5,24 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 
 import threading
+import sys
 
-N_ROBOT = 3
+
 N_STICK = 2
+ROBOT_LIMIT = 4
+
+if len(sys.argv) > ROBOT_LIMIT + 1:
+  print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
+  print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
+  N_ROBOT = ROBOT_LIMIT
+else:
+  N_ROBOT = len(sys.argv)-1
+
+robot_names = []
+for r in range(N_ROBOT):
+  robot_names.append(sys.argv[r+1])
+  print('robot ' + str(r) +  ' is mapped to ' + sys.argv[r+1])
+
 
 def vo_to_twist(vo):
   twist = Twist()
@@ -62,13 +77,13 @@ def talker():
 
   pubs = []
   for i in range(N_ROBOT):
-    pubs.append(rospy.Publisher('robot%d/cmd_vel' % i, Twist, queue_size = 1))
+    pubs.append(rospy.Publisher(robot_names[i] + '/cmd_vel', Twist, queue_size = 1))
     
     # need to create a new functional scope to callback based on topic number
     def curried_callback(j):
       return lambda m: state.cmd_callback(j,m)
 
-    rospy.Subscriber('robot%d/cmd_vel_in' % i, Twist, curried_callback(i))
+    rospy.Subscriber(robot_names[i] + '/cmd_vel_in', Twist, curried_callback(i))
   
   rospy.Subscriber('joy', Joy, state.joy_callback)
   r = rospy.Rate(30)
