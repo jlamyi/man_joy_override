@@ -3,6 +3,7 @@
 import rospy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
+from std_msgs.msg import String
 
 import threading
 import sys
@@ -11,6 +12,7 @@ import sys
 N_STICK = 2
 ROBOT_LIMIT = 4
 
+'''
 if len(sys.argv) > ROBOT_LIMIT + 1:
   print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
   print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
@@ -21,7 +23,7 @@ else:
 robot_names = []
 for r in range(N_ROBOT):
   robot_names.append(sys.argv[r+1])
-  print('robot ' + str(r) +  ' is mapped to ' + sys.argv[r+1])
+  print('robot ' + str(r) +  ' is mapped to ' + sys.argv[r+1])'''
 
 
 def vo_to_twist(vo):
@@ -32,7 +34,7 @@ def vo_to_twist(vo):
 
 class ManJoyState():
   def __init__(self):
-    self.cmd_in = [(0,0)]*N_ROBOT
+    self.cmd_in = [(0,0)]*ROBOT_LIMIT
     self.joy_dest = range(N_STICK)
     self.joy_in = [(0,0)]*N_STICK
     self.lock = threading.Condition()
@@ -56,7 +58,7 @@ class ManJoyState():
         self.joy_dest[d] = dest
         for d_other in range(N_STICK):
           if d_other is not d and self.joy_dest[d_other] is dest:
-            self.joy_dest[d_other] = N_ROBOT
+            self.joy_dest[d_other] = ROBOT_LIMIT
           
         rospy.loginfo('Set dest of stick %d to robot %d' % (d, self.joy_dest[d]))
     
@@ -69,45 +71,90 @@ class ManJoyState():
     rospy.loginfo('callback cmd_in[%d] = (%f,%f)' % 
       (which, self.cmd_in[which][0], self.cmd_in[which][1]))
     self.lock.release()
+
+
+
+
+class robot_manager():
+  def __init__(self):
+    self.lock2 = threading.Condition()
+    self.robot_names = ["dummy"]*ROBOT_LIMIT
+    self.state = ManJoyState()
+    self.pubs = [rospy.Publisher('dummy/cmd_vel', Twist, queue_size = 1)]*4 
+    self.subs_init()
+
+  def pubs_update(self):
+      for i in range(ROBOT_LIMIT):
+        self.pubs[i]=rospy.Publisher(self.robot_names[i] + '/cmd_vel', Twist, queue_size = 1)
+
+  def subs_init(self):
+      for i in range(ROBOT_LIMIT):
+        rospy.Subscriber('robot' + str(i) + '/cmd_vel_in', Twist, self.curried_callback(i))
+      rospy.Subscriber("/online_detector/online_robots", String, self.online_robot_callback)
+
+  def curried_callback(self,j):
+    return lambda m: self.state.cmd_callback(j,m)
+
+  def show_mapping(self):
+      for i in range(ROBOT_LIMIT):
+          print('robot' + str(i) +  ' is mapped to ' + self.robot_names[i])
+
+  def online_robot_callback(self,data):
+    online_robot_list = data.data.split(',')
+
+    self.lock2.acquire()
+    new = list(set(online_robot_list)-set(self.robot_names))
+    lost = list(set(self.robot_names)-set(online_robot_list))
+
+    if len(new) + len(lost) > 0:
+        if len(online_robot_list) > ROBOT_LIMIT:
+            print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
+            print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
+            self.robot_names = online_robot_list[:ROBOT_LIMIT]
+        else:
+            for i in range(len(online_robot_list)):
+                self.robot_names[i] = online_robot_list[i]
+        
+        self.pubs_update()
+        print "Joy configuration changes: "
+        self.show_mapping()
+    self.lock2.release()
+
+
     
-def talker():
-  state = ManJoyState()
+
+
+def run():
+
+  rm = robot_manager()
+  state = rm.state
 
   rospy.init_node('man_joy_override', anonymous=True)
 
-  pubs = []
-  for i in range(N_ROBOT):
-    pubs.append(rospy.Publisher(robot_names[i] + '/cmd_vel', Twist, queue_size = 1))
-    
-    # need to create a new functional scope to callback based on topic number
-    def curried_callback(j):
-      return lambda m: state.cmd_callback(j,m)
-
-    rospy.Subscriber(robot_names[i] + '/cmd_vel_in', Twist, curried_callback(i))
-  
   rospy.Subscriber('joy', Joy, state.joy_callback)
   r = rospy.Rate(30)
 
   while not rospy.is_shutdown():
     # for each publisher, use joystick if joy_dest designates one of the robots
     # otherwise use corresponding cmd_in
-    for i in range(N_ROBOT):
+    for i in range(ROBOT_LIMIT):
+
       state.lock.acquire()
       which = i
-      #rospy.loginfo('talker cmd_in[%d] = (%f,%f)' % 
-        #(which, state.cmd_in[which][0], state.cmd_in[which][1]))
 
       if i in state.joy_dest:
         vo_cmd = state.joy_in[state.joy_dest.index(i)]
       else:
         vo_cmd = state.cmd_in[i]
-
-      pubs[i].publish(vo_to_twist(vo_cmd))
       state.lock.release()
+
+      rm.lock2.acquire()
+      rm.pubs[i].publish(vo_to_twist(vo_cmd))
+      rm.lock2.release()
 
     r.sleep()
 
 if __name__ == '__main__':
   try:
-    talker()
+    run()
   except rospy.ROSInterruptException: pass
