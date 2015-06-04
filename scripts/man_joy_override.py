@@ -12,19 +12,6 @@ import sys
 N_STICK = 2
 ROBOT_LIMIT = 4
 
-'''
-if len(sys.argv) > ROBOT_LIMIT + 1:
-  print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
-  print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
-  N_ROBOT = ROBOT_LIMIT
-else:
-  N_ROBOT = len(sys.argv)-1
-
-robot_names = []
-for r in range(N_ROBOT):
-  robot_names.append(sys.argv[r+1])
-  print('robot ' + str(r) +  ' is mapped to ' + sys.argv[r+1])'''
-
 
 def vo_to_twist(vo):
   twist = Twist()
@@ -77,9 +64,9 @@ class ManJoyState():
 
 class robot_manager():
   def __init__(self):
-    self.lock2 = threading.Condition()
     self.robot_names = ["dummy"]*ROBOT_LIMIT
     self.state = ManJoyState()
+    self.lock = self.state.lock
     self.pubs = [rospy.Publisher('dummy/cmd_vel', Twist, queue_size = 1)]*4 
     self.subs_init()
 
@@ -102,7 +89,7 @@ class robot_manager():
   def online_robot_callback(self,data):
     online_robot_list = data.data.split(',')
 
-    self.lock2.acquire()
+    self.lock.acquire()
     new = list(set(online_robot_list)-set(self.robot_names))
     lost = list(set(self.robot_names)-set(online_robot_list))
 
@@ -112,13 +99,15 @@ class robot_manager():
             print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
             self.robot_names = online_robot_list[:ROBOT_LIMIT]
         else:
-            for i in range(len(online_robot_list)):
-                self.robot_names[i] = online_robot_list[i]
+            self.robot_names = ["dummy"]*ROBOT_LIMIT
+            if len(online_robot_list) != 0:
+                for i in range(len(online_robot_list)):
+                    self.robot_names[i] = online_robot_list[i]
         
         self.pubs_update()
         print "Joy configuration changes: "
         self.show_mapping()
-    self.lock2.release()
+    self.lock.release()
 
 
     
@@ -130,29 +119,34 @@ def run():
   state = rm.state
 
   rospy.init_node('man_joy_override', anonymous=True)
-
   rospy.Subscriber('joy', Joy, state.joy_callback)
-  r = rospy.Rate(30)
+  rate = rospy.Rate(30)
+
+  no_robot = True
+
+  while no_robot:
+    for r in rm.robot_names:
+      if r != "dummy":
+        no_robot = False
+        break
 
   while not rospy.is_shutdown():
     # for each publisher, use joystick if joy_dest designates one of the robots
     # otherwise use corresponding cmd_in
     for i in range(ROBOT_LIMIT):
 
-      state.lock.acquire()
+      rm.lock.acquire()
       which = i
 
       if i in state.joy_dest:
         vo_cmd = state.joy_in[state.joy_dest.index(i)]
       else:
         vo_cmd = state.cmd_in[i]
-      state.lock.release()
-
-      rm.lock2.acquire()
+ 
       rm.pubs[i].publish(vo_to_twist(vo_cmd))
-      rm.lock2.release()
+      rm.lock.release()
 
-    r.sleep()
+    rate.sleep()
 
 if __name__ == '__main__':
   try:
