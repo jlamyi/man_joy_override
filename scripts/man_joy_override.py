@@ -93,6 +93,9 @@ class robot_manager():
     new = list(set(online_robot_list)-set(self.robot_names))
     lost = list(set(self.robot_names)-set(online_robot_list))
 
+    while "dummy" in lost:
+        lost.remove("dummy")
+  
     if len(new) + len(lost) > 0:
         if len(online_robot_list) > ROBOT_LIMIT:
             print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
