@@ -77,7 +77,7 @@ class robot_manager():
   def subs_init(self):
       for i in range(ROBOT_LIMIT):
         rospy.Subscriber('robot' + str(i) + '/cmd_vel_in', Twist, self.curried_callback(i))
-      rospy.Subscriber("/online_detector/online_robots", String, self.online_robot_callback)
+      rospy.Subscriber("/online_detector/alive_robots", String, self.alive_robot_callback)
 
   def curried_callback(self,j):
     return lambda m: self.state.cmd_callback(j,m)
@@ -86,26 +86,26 @@ class robot_manager():
       for i in range(ROBOT_LIMIT):
           print('robot' + str(i) +  ' is mapped to ' + self.robot_names[i])
 
-  def online_robot_callback(self,data):
-    online_robot_list = data.data.split(',')
+  def alive_robot_callback(self,data):
+    alive_robot_list = data.data.split(',')
 
     self.lock.acquire()
-    new = list(set(online_robot_list)-set(self.robot_names))
-    lost = list(set(self.robot_names)-set(online_robot_list))
+    new = list(set(alive_robot_list)-set(self.robot_names))
+    lost = list(set(self.robot_names)-set(alive_robot_list))
 
     while "dummy" in lost:
         lost.remove("dummy")
   
     if len(new) + len(lost) > 0:
-        if len(online_robot_list) > ROBOT_LIMIT:
+        if len(alive_robot_list) > ROBOT_LIMIT:
             print ('The amount of robots exceeds the limitation ' + str(ROBOT_LIMIT))
             print ('Only the first ' + str(ROBOT_LIMIT) + ' robot names will be taken')
-            self.robot_names = online_robot_list[:ROBOT_LIMIT]
+            self.robot_names = alive_robot_list[:ROBOT_LIMIT]
         else:
             self.robot_names = ["dummy"]*ROBOT_LIMIT
-            if len(online_robot_list) != 0:
-                for i in range(len(online_robot_list)):
-                    self.robot_names[i] = online_robot_list[i]
+            if len(alive_robot_list) != 0:
+                for i in range(len(alive_robot_list)):
+                    self.robot_names[i] = alive_robot_list[i]
         
         self.pubs_update()
         print "Joy configuration changes: "
